@@ -10,65 +10,154 @@
 
 ## Architecture
 
-```
-┌─────────────────────────┐
-│      UI Web             │  HTML / CSS / Canvas
-│  (presentación)         │
-└────────────┬────────────┘
-             │ eventos DOM
-┌────────────▼────────────┐
-│   hanoi-bridge.js       │  Capa JS — wrapper de la API Wasm
-│   (puente)              │
-└────────────┬────────────┘
-             │ Module._hanoi_*()
-┌────────────▼────────────┐
-│   hanoi.wasm            │  Núcleo C++ compilado con Emscripten
-│   (motor)               │  HanoiGame · HanoiSolver · Tower · Disk
-└─────────────────────────┘
+```mermaid
+graph TD
+    UI["🖥️ Web UI\nHTML / CSS / Canvas"]
+    Bridge["hanoi-bridge.js\nJS Bridge — Wasm API wrapper"]
+    Wasm["hanoi.wasm\nC++ Core compiled with Emscripten\nHanoiGame · HanoiSolver · Tower · Disk"]
+
+    UI -- "DOM events" --> Bridge
+    Bridge -- "Module._hanoi_*()" --> Wasm
+    Wasm -- "game state" --> Bridge
+    Bridge -- "CustomEvents" --> UI
 ```
 
-**Un solo núcleo C++.** No existe lógica duplicada en JavaScript.
-La UI solo renderiza y despacha acciones; nunca toma decisiones del juego.
+**Single C++ source of truth.** No logic is duplicated in JavaScript.
+The UI only renders and dispatches actions — it never makes game decisions.
 
 ---
 
-## Estructura del repositorio
+## Repository Structure
 
 ```
 Hanoi-Towers/
 ├── core/
-│   ├── Disk.h            # Clase Disk (tamaño, comparadores)
-│   ├── Tower.h           # Clase Tower — pila de discos con invariante
-│   ├── HanoiGame.h       # Motor del juego — estado, movimientos, historial
-│   ├── HanoiSolver.h     # Solver recursivo — genera secuencia óptima
-│   └── hanoi_api.cpp     # API C exportada a WebAssembly (EMSCRIPTEN_KEEPALIVE)
+│   ├── Disk.h            # Disk class (size, comparators)
+│   ├── Tower.h           # Tower class — disk stack with invariant enforcement
+│   ├── HanoiGame.h       # Game engine — state, moves, history
+│   ├── HanoiSolver.h     # Recursive solver — generates optimal move sequence
+│   └── hanoi_api.cpp     # C API exported to WebAssembly (EMSCRIPTEN_KEEPALIVE)
 ├── web/
-│   ├── index.html        # UI principal
-│   ├── style.css         # Diseño oscuro con glassmorphism
-│   ├── hanoi-bridge.js   # Puente JS ↔ Wasm (event-driven)
-│   └── hanoi-ui.js       # Renderer Canvas + controles
+│   ├── index.html        # Main UI page
+│   ├── style.css         # Apple-inspired design system
+│   ├── hanoi-bridge.js   # JS ↔ Wasm bridge (event-driven)
+│   └── hanoi-ui.js       # Canvas renderer + controls + animations
 ├── tests/
-│   ├── test_core.cpp     # Unit tests del motor (sin dependencias externas)
-│   └── test_native.cpp   # CLI interactivo para pruebas nativas
-├── docs/                 # UML, diagramas, capturas
-├── paper/                # Paper académico y assets
-├── CMakeLists.txt        # Build: nativo (tests) + Emscripten (Wasm)
+│   ├── test_core.cpp     # Unit tests for the engine (no external dependencies)
+│   └── test_native.cpp   # Interactive CLI for native testing
+├── docs/                 # UML diagrams, screenshots
+├── paper/                # Academic paper and assets
+├── CMakeLists.txt        # Dual-mode build: native (tests) + Emscripten (Wasm)
 └── README.md
 ```
 
 ---
 
-## Compilación
+## Class Diagram
 
-### Prerrequisitos
+```mermaid
+classDiagram
+    class Disk {
+        -int m_size
+        +Disk(int size)
+        +size() int
+        +operator<(Disk) bool
+        +operator>(Disk) bool
+        +operator==(Disk) bool
+    }
 
-| Herramienta | Versión recomendada |
-|-------------|---------------------|
+    class Tower {
+        -string m_name
+        -vector~Disk~ m_disks
+        +Tower(string name)
+        +push(Disk) void
+        +pop() Disk
+        +top() Disk
+        +empty() bool
+        +size() int
+        +disks() vector~Disk~
+        +clear() void
+    }
+
+    class HanoiGame {
+        -int m_numDisks
+        -bool m_finished
+        -vector~Tower~ m_towers
+        -vector~Move~ m_history
+        +reset(int numDisks) void
+        +moveDisk(int from, int to) bool
+        +isFinished() bool
+        +getMoveCount() int
+        +getTowerSize(int t) int
+        +getDiskAt(int t, int i) int
+        +getHistory() vector~Move~
+    }
+
+    class HanoiSolver {
+        +solve(int n, int from, int to, int aux)$ vector~Move~
+        +computeStepCount(int n)$ int
+        +applyTo(HanoiGame, vector~Move~)$ void
+    }
+
+    class Move {
+        +int from
+        +int to
+        +int disk
+    }
+
+    Tower "1" *-- "0..*" Disk : contains
+    HanoiGame "1" *-- "3" Tower : owns
+    HanoiGame "1" *-- "0..*" Move : records
+    HanoiSolver ..> HanoiGame : operates on
+    HanoiSolver ..> Move : produces
+```
+
+---
+
+## Build Flow
+
+```mermaid
+flowchart LR
+    src["C++ Source\ncore/*.h\ncore/hanoi_api.cpp"]
+
+    subgraph native["Native Build (testing)"]
+        cmake["cmake -B build"]
+        tests["ctest\n✓ unit tests"]
+        cli["hanoi_native\nCLI interactive"]
+        cmake --> tests
+        cmake --> cli
+    end
+
+    subgraph wasm["WebAssembly Build"]
+        emcmake["emcmake cmake -B build-wasm"]
+        wasmout["hanoi.js + hanoi.wasm"]
+        emcmake --> wasmout
+    end
+
+    subgraph web["Web Deployment"]
+        webui["web/\nindex.html + bridge + UI"]
+        serve["python -m http.server 8080\nlocalhost:8080"]
+        webui --> serve
+    end
+
+    src --> cmake
+    src --> emcmake
+    wasmout --> webui
+```
+
+---
+
+## Build Instructions
+
+### Prerequisites
+
+| Tool | Recommended version |
+|------|---------------------|
 | C++ compiler | GCC ≥ 11 / Clang ≥ 14 / MSVC 2022 |
 | CMake | ≥ 3.20 |
 | Emscripten SDK | latest |
 
-### 1. Instalar Emscripten
+### 1. Install Emscripten
 
 ```bash
 git clone https://github.com/emscripten-core/emsdk.git
@@ -76,38 +165,39 @@ cd emsdk
 ./emsdk install latest
 ./emsdk activate latest
 
-# Linux/macOS:
+# Linux / macOS:
 source ./emsdk_env.sh
 
 # Windows (PowerShell):
 .\emsdk_env.ps1
 ```
 
-### 2. Build nativo (pruebas sin navegador)
+### 2. Native build (test without a browser)
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 
-# Ejecutar tests
+# Run unit tests
 ctest --test-dir build --output-on-failure
 
-# CLI interactivo
-./build/hanoi_native
+# Interactive CLI
+./build/hanoi_native        # Linux/macOS
+.\build\Debug\hanoi_native.exe   # Windows
 ```
 
-### 3. Build WebAssembly
+### 3. WebAssembly build
 
 ```bash
 emcmake cmake -B build-wasm
 cmake --build build-wasm
 
-# Copiar salida a web/
-cp build-wasm/hanoi.js  web/
+# Copy output to web/
+cp build-wasm/hanoi.js   web/
 cp build-wasm/hanoi.wasm web/
 ```
 
-### 4. Servir la UI
+### 4. Serve the UI
 
 ```bash
 # Python
@@ -117,53 +207,54 @@ cd web && python -m http.server 8080
 cd web && npx serve .
 ```
 
-Luego abre `http://localhost:8080`.
+Then open `http://localhost:8080`.
 
 ---
 
-## API Wasm (C → JS)
+## Wasm API (C → JS)
 
-| Función | Descripción |
-|---------|-------------|
-| `hanoi_init(n)` | Inicializar con n discos |
-| `hanoi_reset(n)` | Reiniciar |
-| `hanoi_move(from, to)` | Mover disco; retorna 1 si legal |
-| `hanoi_is_finished()` | 1 si el puzzle está resuelto |
-| `hanoi_get_move_count()` | Movimientos realizados |
-| `hanoi_get_num_disks()` | Cantidad de discos |
-| `hanoi_get_tower_size(t)` | Discos en torre t |
-| `hanoi_get_disk_at(t, i)` | Tamaño del disco en posición i |
-| `hanoi_solve_precompute()` | Calcular solución óptima; retorna nº de pasos |
-| `hanoi_solve_step_from(i)` | Torre origen del paso i |
-| `hanoi_solve_step_to(i)` | Torre destino del paso i |
-| `hanoi_solve_step_disk(i)` | Disco movido en el paso i |
-
----
-
-## Características de la UI
-
-- Modo manual: click para seleccionar y mover discos
-- Modo automático: solver recursivo con animación paso a paso
-- Control de velocidad de animación (1× a 10×)
-- Historial de movimientos en tiempo real
-- Estadísticas: movimientos, óptimo, eficiencia
-- Responsive: funciona en móvil y desktop
-- Fallback JS en ausencia del módulo Wasm (para desarrollo)
+| Function | Description |
+|----------|-------------|
+| `hanoi_init(n)` | Initialize with n disks |
+| `hanoi_reset(n)` | Restart the game |
+| `hanoi_move(from, to)` | Move a disk; returns 1 if legal |
+| `hanoi_is_finished()` | Returns 1 if the puzzle is solved |
+| `hanoi_get_move_count()` | Total moves made |
+| `hanoi_get_num_disks()` | Number of disks |
+| `hanoi_get_tower_size(t)` | Disks on tower t |
+| `hanoi_get_disk_at(t, i)` | Size of disk at position i on tower t |
+| `hanoi_solve_precompute()` | Compute optimal solution; returns step count |
+| `hanoi_solve_step_from(i)` | Source tower of step i |
+| `hanoi_solve_step_to(i)` | Destination tower of step i |
+| `hanoi_solve_step_disk(i)` | Disk moved at step i |
 
 ---
 
-## Ejes académicos
+## UI Features
 
-1. **Modelado OO**: `Disk`, `Tower`, `HanoiGame`, `HanoiSolver`
-2. **Pilas como estructura de datos**: `Tower` implementa pila LIFO con invariante
-3. **Solver recursivo**: algoritmo clásico de Hanói `O(2^n)` pasos
-4. **Separación core / UI**: la lógica nunca está en JavaScript
-5. **Compilación a WebAssembly**: Emscripten + CMake dual-mode
-6. **Integración C++/JS**: funciones C exportadas con `EMSCRIPTEN_KEEPALIVE`
-7. **Visualización interactiva**: Canvas + event-driven bridge
+- **Manual mode** — click or use keys `1` `2` `3` to select and move disks
+- **Auto-solve mode** — recursive solver with step-by-step animation
+- **Speed control** — animation speed from 1× to 10×
+- **Move history** — live log of every move
+- **Statistics** — move count, optimal, efficiency (0–100%)
+- **Undo** — revert last move in manual mode
+- **Responsive** — works on mobile and desktop
+- **JS fallback** — UI works without Wasm for development
 
 ---
 
-## Licencia
+## Academic Axes
 
-MIT — ver [LICENSE](LICENSE)
+1. **OOP modeling** — `Disk`, `Tower`, `HanoiGame`, `HanoiSolver`
+2. **Stack as data structure** — `Tower` implements a LIFO stack with invariant enforcement
+3. **Recursive solver** — classic Hanoi algorithm, O(2ⁿ − 1) steps
+4. **Core / UI separation** — game logic never lives in JavaScript
+5. **WebAssembly compilation** — Emscripten + CMake dual-mode build
+6. **C++/JS integration** — C functions exported via `EMSCRIPTEN_KEEPALIVE`
+7. **Interactive visualization** — Canvas + event-driven JS bridge
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE)

@@ -1,14 +1,14 @@
 /**
  * hanoi-ui.js — Renderer + interaction layer
- * Depende de HanoiBridge (hanoi-bridge.js)
+ * Depends on HanoiBridge (hanoi-bridge.js)
  *
- * Funciones disponibles:
- *  - Juego manual: click en torres / teclas 1,2,3
- *  - Auto-resolver: animación paso a paso con velocidad controlada
- *  - Animación de disco volando en arco (Bezier cuadrático)
- *  - Hover resaltado / selección visual
- *  - Flash de error en movimientos ilegales
- *  - Deshacer último movimiento (modo manual)
+ * Features:
+ *  - Manual play: click on towers / keys 1, 2, 3
+ *  - Auto-solve: step-by-step animation with speed control
+ *  - Flying disk arc animation (quadratic Bezier)
+ *  - Hover highlight / visual selection
+ *  - Error flash on illegal moves
+ *  - Undo last move (manual mode)
  */
 (async function () {
 
@@ -147,14 +147,14 @@
       undoStack     = [];
       visualTowers  = gameState.towers.map(t => [...t]);
       document.getElementById('win-overlay').classList.add('hidden');
-      setStatus('Selecciona una torre para mover un disco');
+      setStatus('Select a tower to move a disk');
       updateHistory([]);
     });
 
     HanoiBridge.on('hanoi:finished', s => {
       const optimal = Math.pow(2, s.numDisks) - 1;
       document.getElementById('win-moves-text').textContent =
-        `${s.moveCount} movimientos — óptimo: ${optimal}`;
+        `${s.moveCount} moves — optimal: ${optimal}`;
       document.getElementById('win-overlay').classList.remove('hidden');
       stopSolve(false);
     });
@@ -165,7 +165,7 @@
     if (flyingDisk) return false;
 
     const src = visualTowers[from];
-    if (!src.length) { flashTower(from, 'error'); setStatus('Torre vacía', 'error'); return false; }
+    if (!src.length) { flashTower(from, 'error'); setStatus('Empty tower', 'error'); return false; }
 
     // Capture positions BEFORE modifying visual state
     const diskSize = src[src.length - 1];
@@ -179,8 +179,8 @@
     const ok = HanoiBridge.move(from, to);
     if (!ok) {
       flashTower(to, 'error');
-      setStatus('Movimiento ilegal', 'error');
-      setTimeout(() => setStatus('Selecciona una torre para mover un disco'), 1400);
+      setStatus('Illegal move', 'error');
+      setTimeout(() => setStatus('Select a tower to move a disk'), 1400);
       return false;
     }
 
@@ -201,24 +201,21 @@
   function undoMove() {
     if (flyingDisk || !undoStack.length) return;
     const { from, to, diskSize } = undoStack.pop();
-    // reverse: move diskSize from `to` back to `from`
-    // We do it directly via HanoiBridge but since undo isn't in the C++ API,
-    // we rebuild the game state from scratch by replaying the history minus last move.
+    // Undo: rebuild state from scratch replaying history minus last move
+    // (the C++ core has no native undo, so we replay from the beginning)
     rebuildFromHistory();
   }
 
   function rebuildFromHistory() {
-    // Start fresh, replay all moves except the last one
-    const history = [...undoStack]; // already popped the last one
+    // Reset and replay all moves except the one just popped
+    const history = [...undoStack];
     const n = gameState.numDisks;
     HanoiBridge.reset(n);
-    // We rebuild via move calls. The bridge will fire events.
     for (const step of history) {
       HanoiBridge.move(step.from, step.to);
     }
-    // Sync visual
+    // Sync visual state
     visualTowers = HanoiBridge.getState().towers.map(t => [...t]);
-    // Rebuild history list UI
     rebuildHistoryUI(history);
   }
 
@@ -249,7 +246,7 @@
     document.getElementById('btn-solve').disabled = true;
     document.getElementById('btn-stop').disabled  = false;
     document.getElementById('btn-reset-auto').disabled = true;
-    setStatus(`Resolviendo — ${solveQueue.length} pasos`);
+    setStatus(`Solving — ${solveQueue.length} steps`);
   }
 
   function stopSolve(resetButtons = true) {
@@ -274,9 +271,9 @@
     if (m === 'auto') {
       stopSolve();
       selectedTower = -1;
-      setStatus('Pulsa "Resolver" para ver la solución animada');
+      setStatus('Press "Solve" to watch the animated solution');
     } else {
-      setStatus('Selecciona una torre para mover un disco');
+      setStatus('Select a tower to move a disk');
     }
   }
 
@@ -293,11 +290,11 @@
     const opt = Math.pow(2, s.numDisks) - 1;
     document.getElementById('stat-optimal').textContent = opt;
     if (s.moveCount >= opt) {
-      // Eficiencia: óptimo vs movimientos realizados, siempre entre 0% y 100%
+      // Efficiency: optimal / actual moves, always 0–100%
       const eff = Math.min(100, Math.round(opt / s.moveCount * 100));
       document.getElementById('stat-eff').textContent = eff + '%';
     } else {
-      // Aún no se ha superado el mínimo posible → mostrar '—'
+      // Not yet at minimum possible moves — show placeholder
       document.getElementById('stat-eff').textContent = '—';
     }
   }
@@ -314,12 +311,12 @@
       <span>${TOWER_NAMES[to]}</span>
       <span class="history-disk">D${disk}</span>`;
     list.prepend(li);
-    document.getElementById('history-count').textContent = count + ' mov.';
+    document.getElementById('history-count').textContent = count + ' moves';
   }
 
   function updateHistory(history) {
     document.getElementById('history-list').innerHTML = '';
-    document.getElementById('history-count').textContent = '0 mov.';
+    document.getElementById('history-count').textContent = '0 moves';
   }
 
   // ── Render ───────────────────────────────────────────────────────
@@ -494,7 +491,7 @@
     ctx.font         = `500 11px -apple-system, sans-serif`;
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText('Origen', cx, ry - 4);
+    ctx.fillText('Source', cx, ry - 4);
     ctx.restore();
   }
 
@@ -548,20 +545,20 @@
     if (selectedTower === -1) {
       if (!visualTowers[t].length) {
         flashTower(t, 'error');
-        setStatus('Esa torre no tiene discos', 'error');
-        setTimeout(() => setStatus('Selecciona una torre para mover un disco'), 1400);
+        setStatus('That tower has no disks', 'error');
+        setTimeout(() => setStatus('Select a tower to move a disk'), 1400);
         return;
       }
       selectedTower = t;
       const diskSize = visualTowers[t][visualTowers[t].length - 1];
-      setStatus(`Disco ${diskSize} seleccionado — elige destino`);
+      setStatus(`Disk ${diskSize} selected — choose destination`);
     } else {
       const from = selectedTower;
       selectedTower = -1;
       if (from !== t) {
         attemptMove(from, t);
       } else {
-        setStatus('Selecciona una torre diferente');
+        setStatus('Select a different tower');
       }
     }
   });
@@ -574,7 +571,7 @@
 
   canvas.addEventListener('mouseleave', () => { hoveredTower = -1; });
 
-  // Keyboard: 1,2,3
+  // Keyboard: 1, 2, 3
   document.addEventListener('keydown', e => {
     if (mode !== 'manual' || flyingDisk) return;
     const key = parseInt(e.key);
@@ -587,17 +584,17 @@
         }
         selectedTower = t;
         const diskSize = visualTowers[t][visualTowers[t].length - 1];
-        setStatus(`Disco ${diskSize} seleccionado — elige destino [1,2,3]`);
+        setStatus(`Disk ${diskSize} selected — choose destination [1, 2, 3]`);
       } else if (selectedTower === t) {
         selectedTower = -1;
-        setStatus('Selección cancelada');
+        setStatus('Selection cancelled');
       } else {
         const from = selectedTower;
         selectedTower = -1;
         attemptMove(from, t);
       }
     }
-    if (e.key === 'Escape') { selectedTower = -1; setStatus('Selección cancelada'); }
+    if (e.key === 'Escape') { selectedTower = -1; setStatus('Selection cancelled'); }
   });
 
   // ── Controls wiring ──────────────────────────────────────────────
@@ -628,7 +625,7 @@
   btnStop.addEventListener('click', () => stopSolve());
   btnResetAuto.addEventListener('click', () => {
     stopSolve(false); HanoiBridge.reset(parseInt(diskSlider.value));
-    setStatus('Pulsa "Resolver" para ver la solución animada');
+    setStatus('Press "Solve" to watch the animated solution');
   });
   btnWinRestart.addEventListener('click', () => {
     document.getElementById('win-overlay').classList.add('hidden');
@@ -683,11 +680,11 @@
     const badge = document.getElementById('wasm-status');
     try {
       await HanoiBridge.init('./hanoi.js');
-      badge.querySelector('.badge-label').textContent = 'Wasm activo';
+      badge.querySelector('.badge-label').textContent = 'Wasm active';
       badge.classList.add('ready');
     } catch {
       applyFallback(3);
-      badge.querySelector('.badge-label').textContent = 'Modo JS';
+      badge.querySelector('.badge-label').textContent = 'JS mode';
     }
 
     bindBridgeEvents();
