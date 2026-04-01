@@ -292,10 +292,12 @@
     document.getElementById('stat-disks').textContent  = s.numDisks;
     const opt = Math.pow(2, s.numDisks) - 1;
     document.getElementById('stat-optimal').textContent = opt;
-    if (s.moveCount > 0) {
-      const eff = Math.round(opt / s.moveCount * 100);
+    if (s.moveCount >= opt) {
+      // Eficiencia: óptimo vs movimientos realizados, siempre entre 0% y 100%
+      const eff = Math.min(100, Math.round(opt / s.moveCount * 100));
       document.getElementById('stat-eff').textContent = eff + '%';
     } else {
+      // Aún no se ha superado el mínimo posible → mostrar '—'
       document.getElementById('stat-eff').textContent = '—';
     }
   }
