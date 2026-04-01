@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Torres de Hanói — WebAssembly</title>
+  <meta name="description" content="Visualización interactiva de las Torres de Hanói impulsada por un núcleo C++ compilado a WebAssembly." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-icon">⧖</span>
+        <div>
+          <h1 class="brand-title">Torres de Hanói</h1>
+          <p class="brand-sub">C++ Core · WebAssembly · Canvas</p>
+        </div>
+      </div>
+      <div class="wasm-badge" id="wasm-status">
+        <span class="badge-dot"></span>
+        <span class="badge-label">Cargando…</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────────────── -->
+  <main class="layout">
+
+    <!-- Canvas + mode tabs -->
+    <section class="canvas-section">
+
+      <!-- Mode tabs (iOS segment control style) -->
+      <div class="mode-bar">
+        <div class="segment-control">
+          <button class="segment active" id="tab-manual" data-mode="manual">
+            <span class="segment-icon">✋</span> Manual
+          </button>
+          <button class="segment" id="tab-auto" data-mode="auto">
+            <span class="segment-icon">▶</span> Auto-resolver
+          </button>
+        </div>
+        <div class="kbd-hint" id="kbd-hint">
+          Teclado: <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>
+        </div>
+      </div>
+
+      <!-- Canvas -->
+      <div class="canvas-wrap" aria-label="Tablero de juego">
+        <canvas id="game-canvas"></canvas>
+
+        <!-- Win overlay -->
+        <div class="win-overlay hidden" id="win-overlay">
+          <div class="win-box">
+            <div class="win-emoji" id="win-emoji">🏆</div>
+            <h2 class="win-title">¡Resuelto!</h2>
+            <p class="win-moves" id="win-moves-text"></p>
+            <div class="win-actions">
+              <button class="btn btn-primary" id="win-restart-btn">Jugar de nuevo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status bar under canvas -->
+      <div class="status-bar">
+        <span class="status-msg" id="status-msg">Selecciona una torre para mover un disco</span>
+        <span class="status-keys" id="status-keys"></span>
+      </div>
+    </section>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+
+      <!-- Stats -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Partida</h2>
+          <span class="badge-pill" id="stat-finished-badge" style="display:none">✓ Resuelto</span>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <span class="stat-value" id="stat-moves">0</span>
+            <span class="stat-label">Movimientos</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-optimal">7</span>
+            <span class="stat-label">Óptimo</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-disks">3</span>
+            <span class="stat-label">Discos</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="stat-eff">—</span>
+            <span class="stat-label">Eficiencia</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Configuración</h2>
+        </div>
+
+        <div class="control-row">
+          <label class="control-label" for="disk-slider">Discos</label>
+          <span class="control-value" id="disk-count-label">3</span>
+        </div>
+        <input type="range" id="disk-slider" class="slider" min="1" max="10" value="3" />
+
+        <!-- Speed (only shown in auto mode) -->
+        <div id="speed-group" style="display:none">
+          <div class="control-row">
+            <label class="control-label" for="speed-slider">Velocidad</label>
+            <span class="control-value" id="speed-count-label">5</span>
+          </div>
+          <input type="range" id="speed-slider" class="slider" min="1" max="10" value="5" />
+        </div>
+
+        <!-- Manual controls -->
+        <div id="manual-controls">
+          <button class="btn btn-secondary full-w" id="btn-undo">↩ Deshacer</button>
+          <button class="btn btn-ghost full-w" id="btn-reset">↺ Reiniciar</button>
+        </div>
+
+        <!-- Auto controls -->
+        <div id="auto-controls" style="display:none">
+          <button class="btn btn-primary full-w" id="btn-solve">▶ Resolver</button>
+          <button class="btn btn-ghost full-w" id="btn-stop" disabled>⏹ Detener</button>
+          <button class="btn btn-ghost full-w" id="btn-reset-auto">↺ Reiniciar</button>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="card card-grow">
+        <div class="card-header">
+          <h2 class="card-title">Historial</h2>
+          <span class="history-count" id="history-count">0 mov.</span>
+        </div>
+        <ol class="history-list" id="history-list"></ol>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ── Footer ─────────────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <span>Núcleo C++ compilado a WebAssembly con Emscripten</span>
+    <span class="footer-sep">·</span>
+    <a href="https://github.com/deepdevjose/Hanoi-Towers" target="_blank" rel="noopener">GitHub ↗</a>
+  </footer>
+
+  <script src="hanoi-bridge.js"></script>
+  <script src="hanoi-ui.js"></script>
+</body>
+</html>

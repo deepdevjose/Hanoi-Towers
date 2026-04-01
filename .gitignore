@@ -1,11 +1,47 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.swp
+# Build directories
+build/
+build-wasm/
+out/
+bin/
+.cache/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+_deps/
+install_manifest.txt
+
+# Emscripten output (generated, not committed)
+web/hanoi.js
+web/hanoi.wasm
+web/hanoi.worker.js
+
+# Compiled objects
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.exe
+*.out
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+*.sln
+.vs/
+
+# macOS
 .DS_Store
 
-build/
-dist/
-*.egg-info/
+# Windows
+Thumbs.db
+desktop.ini
 
+# Logs
+*.log
