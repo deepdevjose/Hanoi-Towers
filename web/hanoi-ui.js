@@ -108,7 +108,7 @@
 
   // ── State ───────────────────────────────────────────────────────
   let gameState    = { numDisks:3, moveCount:0, finished:false, towers:[[3,2,1],[],[]] };
-  let visualTowers = [[3,2,1],[],[]];  // mirrors real state, updated by animations
+  let visualTowers = [[3,2,1],[],[]];  // visual mirror — lags behind real state during animations
   let flyingDisk   = null;             // FlyingDisk | null
   let selectedTower = -1;
   let hoveredTower  = -1;
@@ -117,6 +117,10 @@
   let solveQueue    = [];
   let lastMoveEndAt = 0;
   let undoStack     = []; // array of {from,to,diskSize} for undo
+  // Flag: true between a reset() call and its subsequent statechange.
+  // Allows statechange to sync visualTowers after a reset without
+  // interfering with the animation flow during normal moves.
+  let pendingReset  = false;
 
   // ── Animation speed helpers ─────────────────────────────────────
   const speedSlider  = document.getElementById('speed-slider');
@@ -137,21 +141,22 @@
     HanoiBridge.on('hanoi:statechange', s => {
       gameState = s;
       updateStats(s);
-      // Sync the visual tower state whenever there is no animation in flight.
-      // This covers both normal moves (after the FlyingDisk lands) and resets
-      // (flyingDisk is cleared by the reset handler before this event fires).
-      if (!flyingDisk) {
-        visualTowers = s.towers.map(t => [...t]);
+      // Only sync visualTowers here when a reset triggered this event.
+      // During normal moves, attemptMove() manages visualTowers itself
+      // so that the flying-disk animation can interpolate correctly.
+      if (pendingReset) {
+        pendingReset  = false;
+        visualTowers  = s.towers.map(t => [...t]);
       }
     });
 
     HanoiBridge.on('hanoi:reset', () => {
+      pendingReset  = true;   // next statechange will sync visualTowers
       selectedTower = -1;
       solving       = false;
       solveQueue    = [];
-      flyingDisk    = null;   // must be null BEFORE statechange fires so the sync above runs
+      flyingDisk    = null;
       undoStack     = [];
-      // visualTowers will be synced by the statechange handler that follows immediately
       document.getElementById('win-overlay').classList.add('hidden');
       setStatus('Select a tower to move a disk');
       updateHistory([]);
