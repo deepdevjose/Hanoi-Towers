@@ -137,15 +137,21 @@
     HanoiBridge.on('hanoi:statechange', s => {
       gameState = s;
       updateStats(s);
+      // Sync the visual tower state whenever there is no animation in flight.
+      // This covers both normal moves (after the FlyingDisk lands) and resets
+      // (flyingDisk is cleared by the reset handler before this event fires).
+      if (!flyingDisk) {
+        visualTowers = s.towers.map(t => [...t]);
+      }
     });
 
     HanoiBridge.on('hanoi:reset', () => {
       selectedTower = -1;
       solving       = false;
       solveQueue    = [];
-      flyingDisk    = null;
+      flyingDisk    = null;   // must be null BEFORE statechange fires so the sync above runs
       undoStack     = [];
-      visualTowers  = gameState.towers.map(t => [...t]);
+      // visualTowers will be synced by the statechange handler that follows immediately
       document.getElementById('win-overlay').classList.add('hidden');
       setStatus('Select a tower to move a disk');
       updateHistory([]);
